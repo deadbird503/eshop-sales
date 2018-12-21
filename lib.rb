@@ -76,7 +76,7 @@ end
 
 def get_prices(ids)
   COUNTRIES.map do |country|
-    prices = get_prices_aux(country: country, ids: ids[0..10])
+    prices = get_prices_aux(country: country, ids: ids)
   end
 end
 
@@ -139,7 +139,12 @@ def process_price price
       if price[1][:onsale] && !result["value"].nil? && price[1][:value] < result["value"].to_f
         # We have found a sale price that is lower than the normal price!
         # Send a notification about this!
-        puts "Found a better sale price!"
+        send_notification ({
+          value: price[1][:value],
+          title: result["title"],
+          cover_url: result["cover_url"],
+          country: price[1][:country]
+        })
       end
 
       # Always update the database with the latest lowest price.
@@ -150,5 +155,19 @@ def process_price price
     abort
   ensure
     con.close if con
+  end
+end
+
+def send_notification game
+  result = HTTParty.post("https://api.telegram.org/bot#{ENV.fetch("TELEGRAM_BOT_TOKEN")}/sendMessage",
+    body: {
+      chat_id: "@eshopsales",
+      text: "#{game[:title]} is now on sale for €#{game[:value]}!"
+    }
+  )
+
+  if !result["ok"]
+    puts "Something went wrong while sending the Telegram message!"
+    puts result.inspect
   end
 end
