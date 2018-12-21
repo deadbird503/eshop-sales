@@ -42,5 +42,3 @@ lowest_prices = get_lowest_prices prices
 lowest_prices.each do |price|
   process_price price
 end
-
-1==1
