@@ -1,6 +1,7 @@
 require 'pg'
 require 'httparty'
 require 'money'
+require 'eu_central_bank'
 
 require 'yaml'
 require 'enumerator'
@@ -40,7 +41,6 @@ end
 def get_games
   response = HTTParty.get(GAMES_URL, query: DEFAULT_GAMES_PARAMS)
   games = JSON.parse(response.body, symbolize_names: true)[:response][:docs]
-
   games.map do |game|
     {
       region: 'europe',
@@ -61,10 +61,10 @@ def save_game game
     result = con.exec "SELECT * FROM game_sales WHERE nsuid = '#{game[:nsuid]}'"
     if result.ntuples == 0
       # New game
-      con.exec "INSERT INTO game_sales(id, region, game_code, parsed_game_code, title, nsuid, cover_url) VALUES (DEFAULT, '#{game[:region]}', '#{game[:raw_game_code]}', '#{game[:game_code]}', '#{game[:title].gsub("'", "")}', '#{game[:nsuid]}', '#{game[:cover_url]}')"
+      con.exec "INSERT INTO game_sales(id, region, game_code, parsed_game_code, title, nsuid, cover_url, onsale) VALUES (DEFAULT, '#{game[:region]}', '#{game[:raw_game_code]}', '#{game[:game_code]}', '#{game[:title].gsub("'", "")}', '#{game[:nsuid]}', '#{game[:cover_url]}', false)"
     else
       # Update game
-      #con.exec "UPDATE game_sales SET region = "
+      # For now, not needed.
     end
   rescue PG::Error => e
     puts e.message
@@ -77,7 +77,6 @@ end
 def get_prices(ids)
   COUNTRIES.map do |country|
     prices = get_prices_aux(country: country, ids: ids[0..10])
-    binding.pry
   end
 end
 
@@ -98,5 +97,58 @@ def get_prices_aux(country: 'US', ids: [], limit: 50)
       currency: price.dig(:regular_price, :currency),
       value_in_cents: Money.from_amount(value, currency).cents,
     }
+  end
+end
+
+def get_lowest_prices prices
+  lowest_prices = {}
+
+  prices.each do |price|
+    begin
+      exchanged_value = Money.new(price[:value_in_cents], price[:currency]).exchange_to("EUR")
+    rescue Money::Currency::UnknownCurrency => e
+      puts "Cannot exchange currency #{price[:currency]} to EUR! Skipping this price..."
+      next
+    end
+
+    if lowest_prices[price[:nsuid]].nil? || exchanged_value < Money.new(lowest_prices[price[:nsuid]][:value], "EUR")
+      # For this nsuid, we have found a price that is lower. Update it in the hash.
+      lowest_prices[price[:nsuid]] = {
+        value: exchanged_value.to_f,
+        country: price[:country],
+        onsale: (price[:status] == "onsale")
+      }
+    end
+  end
+
+  return lowest_prices
+end
+
+def process_price price
+  begin
+    con = PG.connect dbname: 'eshop', user: ENV.fetch("DB_USERNAME"), password: ENV.fetch("DB_PASSWORD")
+
+    result = con.exec "SELECT * FROM game_sales WHERE nsuid = '#{price[0]}'"
+
+    if result.ntuples == 0
+      puts "The game with nsuid #{price[0]} was not found in the database!"
+      return
+    else
+      result = result[0]
+
+      if price[1][:onsale] && !result["value"].nil? && price[1][:value] < result["value"].to_f
+        # We have found a sale price that is lower than the normal price!
+        # Send a notification about this!
+        puts "Found a better sale price!"
+      end
+
+      # Always update the database with the latest lowest price.
+      con.exec "UPDATE game_sales SET country = '#{price[1][:country]}', onsale = #{price[1][:onsale].to_s}, value = #{price[1][:value]} WHERE nsuid = '#{price[0]}'"
+    end
+  rescue PG::Error => e
+    puts e.message
+    abort
+  ensure
+    con.close if con
   end
 end
