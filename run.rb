@@ -15,6 +15,7 @@ exchange_rates_file = "exchange_rates.xml"
 2. For every game, get the price and whether they are on sale.
 3. Update the game with the price and send notification if it turns on sale.
 =end
+puts DateTime.now.strftime("%d/%m/%Y %H:%M")
 
 puts "Getting latest exchange rates from the ECB..."
 eu_bank = EuCentralBank.new
