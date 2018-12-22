@@ -4,11 +4,11 @@ require 'eu_central_bank'
 
 require 'json'
 
-require File.expand_path("lib.rb")
+require File.dirname(__FILE__) + "/lib.rb"
 
 load_env()
 
-exchange_rates_file = "exchange_rates.xml"
+exchange_rates_file = File.dirname(__FILE__) + "/exchange_rates.xml"
 
 =begin
 1. Save any games not already known.
