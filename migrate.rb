@@ -3,6 +3,8 @@ require File.expand_path("lib.rb")
 
 load_env()
 
+# Remove database and create every table again.
+
 begin
   con = PG.connect dbname: 'eshop', user: ENV.fetch("DB_USERNAME"), password: ENV.fetch("DB_PASSWORD")
 
