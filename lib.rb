@@ -136,7 +136,7 @@ def process_price price
     else
       result = result[0]
 
-      if true#price[1][:onsale] && !result[7].nil? && price[1][:value] < result[7].to_f
+      if price[1][:onsale] && !result[7].nil? && price[1][:value] < result[7].to_f
         # We have found a sale price that is lower than the normal price!
         # Send a notification about this!
         send_notification ({
