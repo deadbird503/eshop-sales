@@ -2,10 +2,12 @@ require "sqlite3"
 require 'httparty'
 require 'money'
 require 'eu_central_bank'
+require 'countries'
 
 require 'yaml'
 require 'enumerator'
 
+# Constants
 GAMES_URL = 'http://search.nintendo-europe.com/en/select'.freeze
 DEFAULT_GAMES_PARAMS = {
   fl: 'product_code_txt,title,date_from,nsuid_txt,image_url_sq_s',
@@ -20,12 +22,10 @@ DEFAULT_GAMES_PARAMS = {
   start: 0,
   wt: 'json',
 }.freeze
-
 COUNTRIES = %w[
   AT AU BE BG CA CH CY CZ DE DK EE ES FI FR GB GR HR HU IE IT JP LT LU LV MT MX NL NO NZ PL PT RO
   RU SE SI SK US ZA
 ].freeze
-
 PRICES_URL = 'https://api.ec.nintendo.com/v1/price'.freeze
 DEFAULT_PRICES_PARAMS = {
   lang: 'en',
@@ -61,7 +61,7 @@ def save_game game
     result = con.execute "SELECT * FROM game_sales WHERE nsuid = '#{game[:nsuid]}'"
     if result.length == 0
       # New game
-      con.execute "INSERT INTO game_sales(region, game_code, parsed_game_code, title, nsuid, cover_url, onsale) VALUES ('#{game[:region]}', '#{game[:raw_game_code]}', '#{game[:game_code]}', '#{game[:title].gsub("'", "")}', '#{game[:nsuid]}', '#{game[:cover_url]}', 0)"
+      con.execute "INSERT INTO game_sales(region, game_code, parsed_game_code, title, nsuid, cover_url, onsale) VALUES ('#{game[:region]}', '#{game[:raw_game_code]}', '#{game[:game_code]}', '#{game[:title].gsub("'", "")}', '#{game[:nsuid]}', '#{game[:cover_url][2..-1]}', 0)"
     else
       # Update game
       # For now, not needed.
@@ -136,10 +136,9 @@ def process_price price
     else
       result = result[0]
 
-      if price[1][:onsale] && !result[7].nil? && price[1][:value] < result[7].to_f
+      if true#price[1][:onsale] && !result[7].nil? && price[1][:value] < result[7].to_f
         # We have found a sale price that is lower than the normal price!
         # Send a notification about this!
-        puts "#{game[:title]} is now on sale for €#{game[:value]}!"
         send_notification ({
           value: price[1][:value],
           title: result[5],
@@ -160,10 +159,12 @@ def process_price price
 end
 
 def send_notification game
+  puts "#{game[:title]} is now on sale for €#{game[:value]}!"
   result = HTTParty.post("https://api.telegram.org/bot#{ENV.fetch("TELEGRAM_BOT_TOKEN")}/sendMessage",
     body: {
       chat_id: "@eshopsales",
-      text: "#{game[:title]} is now on sale for €#{game[:value]}!"
+      parse_mode: 'markdown',
+      text: "[​​​​​​​​​​​](#{game[:cover_url]})#{game[:title]} is now on sale for €#{game[:value]} in #{ISO3166::Country.new(game[:country]).data["name"]}!"
     }
   )
 
