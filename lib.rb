@@ -1,4 +1,4 @@
-require 'pg'
+require "sqlite3"
 require 'httparty'
 require 'money'
 require 'eu_central_bank'
@@ -56,17 +56,17 @@ end
 
 def save_game game
   begin
-    con = PG.connect dbname: 'eshop', user: ENV.fetch("DB_USERNAME"), password: ENV.fetch("DB_PASSWORD")
+    con = SQLite3::Database.new "eshop.db"
 
-    result = con.exec "SELECT * FROM game_sales WHERE nsuid = '#{game[:nsuid]}'"
-    if result.ntuples == 0
+    result = con.execute "SELECT * FROM game_sales WHERE nsuid = '#{game[:nsuid]}'"
+    if result.length == 0
       # New game
-      con.exec "INSERT INTO game_sales(id, region, game_code, parsed_game_code, title, nsuid, cover_url, onsale) VALUES (DEFAULT, '#{game[:region]}', '#{game[:raw_game_code]}', '#{game[:game_code]}', '#{game[:title].gsub("'", "")}', '#{game[:nsuid]}', '#{game[:cover_url]}', false)"
+      con.execute "INSERT INTO game_sales(region, game_code, parsed_game_code, title, nsuid, cover_url, onsale) VALUES ('#{game[:region]}', '#{game[:raw_game_code]}', '#{game[:game_code]}', '#{game[:title].gsub("'", "")}', '#{game[:nsuid]}', '#{game[:cover_url]}', 0)"
     else
       # Update game
       # For now, not needed.
     end
-  rescue PG::Error => e
+  rescue SQLite3::SQLException => e
     puts e.message
     abort
   ensure
@@ -126,31 +126,32 @@ end
 
 def process_price price
   begin
-    con = PG.connect dbname: 'eshop', user: ENV.fetch("DB_USERNAME"), password: ENV.fetch("DB_PASSWORD")
+    con = SQLite3::Database.new "eshop.db"
 
-    result = con.exec "SELECT * FROM game_sales WHERE nsuid = '#{price[0]}'"
+    result = con.execute "SELECT * FROM game_sales WHERE nsuid = '#{price[0]}'"
 
-    if result.ntuples == 0
+    if result.length == 0
       puts "The game with nsuid #{price[0]} was not found in the database!"
       return
     else
       result = result[0]
 
-      if price[1][:onsale] && !result["value"].nil? && price[1][:value] < result["value"].to_f
+      if price[1][:onsale] && !result[7].nil? && price[1][:value] < result[7].to_f
         # We have found a sale price that is lower than the normal price!
         # Send a notification about this!
+        puts "#{game[:title]} is now on sale for €#{game[:value]}!"
         send_notification ({
           value: price[1][:value],
-          title: result["title"],
-          cover_url: result["cover_url"],
+          title: result[5],
+          cover_url: result[6],
           country: price[1][:country]
         })
       end
 
       # Always update the database with the latest lowest price.
-      con.exec "UPDATE game_sales SET country = '#{price[1][:country]}', onsale = #{price[1][:onsale].to_s}, value = #{price[1][:value]} WHERE nsuid = '#{price[0]}'"
+      con.execute "UPDATE game_sales SET country = '#{price[1][:country]}', onsale = #{price[1][:onsale] ? 1 : 0}, value = #{price[1][:value]} WHERE nsuid = '#{price[0]}'"
     end
-  rescue PG::Error => e
+  rescue SQLite3::SQLException => e
     puts e.message
     abort
   ensure

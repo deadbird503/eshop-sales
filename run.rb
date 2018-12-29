@@ -1,4 +1,3 @@
-require 'pg'
 require 'pry'
 require 'eu_central_bank'
 
@@ -9,12 +8,6 @@ require File.dirname(__FILE__) + "/lib.rb"
 load_env()
 
 exchange_rates_file = File.dirname(__FILE__) + "/exchange_rates.xml"
-
-=begin
-1. Save any games not already known.
-2. For every game, get the price and whether they are on sale.
-3. Update the game with the price and send notification if it turns on sale.
-=end
 
 puts DateTime.now.strftime("%d/%m/%Y %H:%M")
 
