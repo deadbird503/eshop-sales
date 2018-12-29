@@ -28,13 +28,13 @@ puts "Found #{games.length} games."
 ##########################################################
 
 puts "Saving all new games..."
-games[0..1].each do |game|
+games.each do |game|
   save_game game
 end
 
 ##########################################################
 
-game_ids = games[0..1].map{|game| game[:nsuid]}.select{|game| game != nil}
+game_ids = games.map{|game| game[:nsuid]}.select{|game| game != nil}
 
 puts "Getting all prices for all games..."
 prices = get_prices(game_ids).flatten
